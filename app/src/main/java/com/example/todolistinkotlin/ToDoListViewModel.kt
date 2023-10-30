@@ -14,10 +14,15 @@ import androidx.annotation.WorkerThread
 import androidx.databinding.ObservableField
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.MutableLiveData
+import androidx.lifecycle.viewModelScope
+import com.example.todolistinkotlin.Analytics.logEvent
+import com.example.todolistinkotlin.api.ApiClient
 import com.example.todolistinkotlin.database.ToDoListDataEntity
 import com.example.todolistinkotlin.database.ToDoListDatabase
 import com.example.todolistinkotlin.notification.AlarmReceiver
+import kotlinx.coroutines.launch
 import java.util.*
+import kotlin.collections.HashMap
 
 /**
  *   Created by Sundar Pichai on 5/8/19.
@@ -70,6 +75,13 @@ class ToDoListViewModel(val context: Application) : AndroidViewModel(context) {
     @RequiresApi(Build.VERSION_CODES.M)
     @WorkerThread
     private fun addData(title: String, date: String, time: String, id: Long) {
+        context.logEvent("ADD_ALARM")
+        apiCall(hashMapOf<String,Any>(
+            "title" to title,
+            "date" to date,
+            "time" to time,
+            "id" to id
+        ))
         //database?.toDoListDao()?.insert(ToDoListDataEntity(title = title, date = date, time = time))
         if (position != -1) {
             database?.toDoListDao()?.update(title = title, date = date, time = time, id = id)
@@ -105,6 +117,7 @@ class ToDoListViewModel(val context: Application) : AndroidViewModel(context) {
     }
 
     fun delete(id: Long) {
+        context.logEvent("DELETE_ALARM")
         database?.toDoListDao()?.Delete(id)
         database?.toDoListDao()?.getAll().let {
             getAllData = it as MutableList<ToDoListDataEntity>
@@ -123,12 +136,23 @@ class ToDoListViewModel(val context: Application) : AndroidViewModel(context) {
         intent.putExtra("id", id)
         intent.putExtra("title", title)
         intent.putExtra("date","Time-> $hour:$minute")
-        val pandingIntent: PendingIntent = PendingIntent.getBroadcast(context, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT)
+        val pandingIntent: PendingIntent = PendingIntent.getBroadcast(context, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
 
         if (i == 0) {
             alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP,  calender.timeInMillis , pandingIntent)
         } else {
             alarmManager.cancel(pandingIntent)
+        }
+    }
+
+    fun apiCall(hashMapOf: HashMap<String, Any>) {
+        viewModelScope.launch {
+          val response =  ApiClient.callApi.sendData(hashMapOf)
+            if(response.isSuccessful){
+                Toast.makeText(context,"Successfully logged to server",Toast.LENGTH_SHORT).show()
+            }else{
+                Toast.makeText(context,"Something went wrong.",Toast.LENGTH_SHORT).show()
+            }
         }
     }
 }
